@@ -1,5 +1,8 @@
+// since we are in developement mode
+require('dotenv').config()
 const express = require('express')
 const app = express()
+const session = require('express-session')
 const passport = require('passport')
 const port = 3000
 const bcrypt = require('bcrypt')
@@ -12,7 +15,13 @@ inializePassport(passport,
     id=>{})
     
 app.use(passport.initialize());
-app.use(passport.session());
+app.use(session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUnitialized: false
+}));
+
+app.use(passport.session())
 app.use(express.urlencoded({extended:false}))
 
 
@@ -37,14 +46,33 @@ app.post('/register',notAuthenticated, (req, res)=>{
          })
 });
 
-
-app.post('/register',notAuthenticated, (req, res)=>{
+app.post('/login',notAuthenticated,(req, res) => {
+    passport.authenticate('login', async (err, user, info) => {    
+         try {
+         console.log(err)
+        if(err || !user){
+          const error = new Error('An Error occurred')
+          return res.json(error);
+        }
+        req.login(user, { session : false }, async (error) => {
+          if( error ) {return error}
+          //We don't want to store the sensitive information such as the
+          //user password in the token so we pick only the email and id
+          const body = { _id : user._id, email : user.email };
+          //Send back the token to the user
+          return res.json({ token });
+        });    
+     } catch (error) {
+        return res.json(error);
+    }
+    });
 });
 
 
 
 
-// To be used as middleware to ensure pages accessed in case authenticated
+
+// To be used as a middleware to ensure an api accessed in case authenticated
 function isAuthenticated(req, res, next) {
     if (req.isAuthenticated()){
         return next()
@@ -53,7 +81,7 @@ function isAuthenticated(req, res, next) {
         "Un authenticated user").JSON)
 }
 
-// To be used as middleware to ensure pages accessed in case not authenticated
+// To be used as a middleware to ensure an api accessed in case not authenticated
 function notAuthenticated(req, res, next) {
     if (req.isAuthenticated()){
         return res.status(403).json(new response(403, null, 
@@ -61,6 +89,4 @@ function notAuthenticated(req, res, next) {
     }
     next();
 }
-
-
 app.listen(port, () => console.log(`Example app listening on port ${port}!`))

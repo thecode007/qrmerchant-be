@@ -2,29 +2,30 @@ const LocalStrategy = require('passport-local').Strategy
 const bcrypt = require('bcrypt')
 
 function init(passport, getUserEmail, getUserByID) {
-    const authenticateUser = (email, password, done) => {
-        if(email == null || email.length == 0 || password == null || password.length == 0) {
-            return done(null, false, {message: "All fields are required"})
+    passport.use('login', new LocalStrategy({
+        usernameField : 'email',
+        passwordField : 'password'
+      }, async (email, password, done) => {
+        try {
+          //Find the user associated with the email provided by the user
+          const user = null
+        //   await UserModel.findOne({ email });
+          if( !user ){
+            //If the user isn't found in the database, return a message
+            return done(null, false, { message : 'User not found'});
+          }
+         
+        //   await user.isValidPassword(password);
+        bcrypt.compare(password, user.password,(err,same) =>{
+            if(same) {
+                return done(null, user, { message : 'Logged in Successfully'});
+            }
+        });
+          //Send the user information to the next middleware
+        } catch (error) {
+          return done(error);
         }
-        const user = getUserEmail(email); // getting a user
-        if(user == null) {
-            return done(null, false, {message: "Wrong username or password"})
-        }
-            bcrypt.compare(password, user.password,(err,same) =>{
-                if(same) {
-                    return done(null, false, {message: "Wrong username or password"})
-                }
-                return done(null, true, {message: "Logged In!!"})
-            })
-        }
-    passport.use(new LocalStrategy({ usernameField: 'email'}, authenticateUser))
-    passport.serializeUser((user, done)=> {
-        done(null, user.id)
-    })
-
-    passport.deserializeUser((id, done)=> {
-        done(null,getUserByID(id))
-    })
+      }));     
 }
 
 module.exports = init
