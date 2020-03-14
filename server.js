@@ -6,7 +6,11 @@ const bcrypt = require('bcrypt')
 const inializePassport = require('./passport-config')
 const response = require('./model/Response')
 const validators = require('./validators')
-inializePassport(passport)
+
+inializePassport(passport, 
+    email =>{}, 
+    id=>{})
+    
 app.use(passport.initialize());
 app.use(passport.session());
 app.use(express.urlencoded({extended:false}))
@@ -14,7 +18,7 @@ app.use(express.urlencoded({extended:false}))
 
 app.get('/', (req, res) => res.send('Hello World!'))
 
-app.post('/register', (req, res)=>{
+app.post('/register',notAuthenticated, (req, res)=>{
     // In case not all fields filled
     if(req.body.username == null || req.body.username.length == 0 || req.body.email == null || req.body.email.length == 0
          || !req.body.password.trim() || req.body.password.length == 0) {
@@ -32,4 +36,31 @@ app.post('/register', (req, res)=>{
            return res.status(201).json(new response(201, null, "Registered Successfully").JSON)
          })
 });
+
+
+app.post('/register',notAuthenticated, (req, res)=>{
+});
+
+
+
+
+// To be used as middleware to ensure pages accessed in case authenticated
+function isAuthenticated(req, res, next) {
+    if (req.isAuthenticated()){
+        return next()
+    }
+    return res.status(401).json(new response(401, null, 
+        "Un authenticated user").JSON)
+}
+
+// To be used as middleware to ensure pages accessed in case not authenticated
+function notAuthenticated(req, res, next) {
+    if (req.isAuthenticated()){
+        return res.status(403).json(new response(403, null, 
+            "Can't access this request when you are authenticated").JSON)
+    }
+    next();
+}
+
+
 app.listen(port, () => console.log(`Example app listening on port ${port}!`))
