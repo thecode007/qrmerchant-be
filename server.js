@@ -1,92 +1,123 @@
-// since we are in developement mode
-require('dotenv').config()
-const express = require('express')
-const app = express()
-const session = require('express-session')
-const passport = require('passport')
-const port = 3000
-const bcrypt = require('bcrypt')
-const inializePassport = require('./passport-config')
-const response = require('./model/Response')
-const validators = require('./validators')
-
-inializePassport(passport, 
-    email =>{}, 
-    id=>{})
-    
+var express     = require('express');
+var app         = express();
+var bodyParser  = require('body-parser');
+var morgan      = require('morgan');
+var mongoose    = require('mongoose');
+var passport	= require('passport');
+var config      = require('./config/database'); // get db config file
+var User        = require('./app/models/user'); // get the mongoose model
+var port        = process.env.PORT || 8080;
+var response    = require('./app/models/response');
+var jwt         = require('jwt-simple');
+var validator   = require('./validators');
+ 
+// get our request parameters
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.json());
+// log to console
+app.use(morgan('dev'));
+// Use the passport package in our application
 app.use(passport.initialize());
-app.use(session({
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUnitialized: false
-}));
-
-app.use(passport.session())
-app.use(express.urlencoded({extended:false}))
-
-
-app.get('/', (req, res) => res.send('Hello World!'))
-
-app.post('/register',notAuthenticated, (req, res)=>{
-    // In case not all fields filled
-    if(req.body.username == null || req.body.username.length == 0 || req.body.email == null || req.body.email.length == 0
-         || !req.body.password.trim() || req.body.password.length == 0) {
-        return res.status(400).json(new response(400, null, "All fields are required").JSON)
-    }
-    if(!validators(req.body.email)){
-        return res.status(400).json(new response(400, null, "Please enter an a valid email").JSON)
-    }
-         bcrypt.hash(req.body.password, 10, (err, hash) => { 
-             if(err){
-                 console.log(err)
-                 return res.status(500).json(new response(500, null, "Internal server error").JSON)
-             }
-           // saving user goes here
-           return res.status(201).json(new response(201, null, "Registered Successfully").JSON)
-         })
+ 
+// demo Route
+app.get('/', function(req, res) {
+  res.send('Hello Merchant' + port + '/api');
 });
 
-app.post('/login',notAuthenticated,(req, res) => {
-    passport.authenticate('login', async (err, user, info) => {    
-         try {
-         console.log(err)
-        if(err || !user){
-          const error = new Error('An Error occurred')
-          return res.json(error);
-        }
-        req.login(user, { session : false }, async (error) => {
-          if( error ) {return error}
-          //We don't want to store the sensitive information such as the
-          //user password in the token so we pick only the email and id
-          const body = { _id : user._id, email : user.email };
-          //Send back the token to the user
-          return res.json({ token });
-        });    
-     } catch (error) {
-        return res.json(error);
-    }
+// connect to database
+mongoose.connect(config.database, { useNewUrlParser: true });
+ 
+// pass passport for configuration
+require('./config/passport')(passport);
+ 
+// bundle our routes
+var apiRoutes = express.Router();
+ 
+apiRoutes.post('/Register', function(req, res) {
+  if (!req.body.username || !req.body.password || !req.body.email) {
+    return res.status(400).json(new response(400, null, "All fields are required").JSON)
+  }
+  if(!validator(req.body.email)) {
+    return res.status(400).json(new response(400, null, "Invalid Email format").JSON)
+  }
+  var newUser = new User({
+      username: req.body.username,
+      password: req.body.password,
+      email: req.body.email
+    });
+    // save the user
+    newUser.save(function(err) {
+      if (err) {
+        return res.status(400).json(new response(400, null, "Email already exists").JSON);
+      }
+      return res.status(201).json(new response(201, null, "Registraion Successful").JSON);
     });
 });
 
+apiRoutes.post('/login', function(req, res) {
+    if (!req.body.password || !req.body.email) {
+        return res.status(400).json(new response(400, null, "All fields are required").JSON)
+      }
+      if(!validator(req.body.email)) {
+        return res.status(400).json(new response(400, null, "Invalid Email format").JSON)
+      }
+
+    User.findOne({
+      email: req.body.email
+    }, function(err, user) {
+
+      if (err) throw err;
+
+      // if user not found
+      if (!user) {
+        return res.status(401).json(new response(401, null, 'Authentication failed. Wrong password.').JSON)
+    } else {
+        // check if password matches
+        user.comparePassword(req.body.password, function (err, isMatch) {
+          if (isMatch && !err) {
+            // if user is found and password is right create a token
+            var token = jwt.encode(user, config.secret);
+            return res.status(200).json(new response(200, {token: 'bearer ' + token, user: user}, "Logedd In!").JSON)
+          } 
+            return res.status(401).json(new response(401, null, 'Authentication failed. Wrong password.').JSON)
+        })}
+})
+})
 
 
-
-
-// To be used as a middleware to ensure an api accessed in case authenticated
-function isAuthenticated(req, res, next) {
-    if (req.isAuthenticated()){
-        return next()
+apiRoutes.post('/getUserProfile', passport.authenticate('jwt', { session: false}), function(req, res) {
+    var token = getToken(req.headers);
+    if (token) {
+      var decoded = jwt.decode(token, config.secret);
+      User.findOne({
+        name: decoded.name
+      }, function(err, user) {
+          if (err) throw err;
+   
+          if (!user) {
+            return res.status(401).json(new response(401, null, "Authentication failed, user not found").JSON)
+          } else {
+            return res.status(200).json(new response(200, {user:{email:user.email, username:user.username}}, "User found!").JSON)
+          }
+      });
+    } else {
+      return res.status(403).json(new response(403, null, "Authentication failed, no access token").JSON)
     }
-    return res.status(401).json(new response(401, null, 
-        "Un authenticated user").JSON)
-}
-
-// To be used as a middleware to ensure an api accessed in case not authenticated
-function notAuthenticated(req, res, next) {
-    if (req.isAuthenticated()){
-        return res.status(403).json(new response(403, null, 
-            "Can't access this request when you are authenticated").JSON)
+  });
+   
+  getToken = function (headers) {
+    if (headers && headers.authorization) {
+      var parted = headers.authorization.split(' ');
+      if (parted.length === 2) {
+        return parted[1];
+      } else {
+        return null;
+      }
+    } else {
+      return null;
     }
-    next();
-}
-app.listen(port, () => console.log(`Example app listening on port ${port}!`))
+  };
+  
+app.use('/api', apiRoutes);
+// Start the server
+app.listen(port);
