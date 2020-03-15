@@ -5,6 +5,10 @@ var morgan      = require('morgan');
 var port        = process.env.PORT || 8080;
 var passport	= require('passport');
 var router      = require('./routes')
+const fs = require('fs');
+const https = require('https');
+const key = fs.readFileSync('./key.pem');
+const cert = fs.readFileSync('./cert.pem');
 
  
 // get our request parameters
@@ -14,13 +18,16 @@ app.use(bodyParser.json());
 app.use(morgan('dev'));
 // Use the passport package in our application
 app.use(passport.initialize());
+
+
  
 // demo Route
 app.get('/', function(req, res) {
   res.send('Hello QR coder');
 });
 
-  
 app.use('/api', router);
+
+const server = https.createServer({key: key, cert: cert }, app);
 // Start the server
-app.listen(port);
+server.listen(port);

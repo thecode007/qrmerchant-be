@@ -8,6 +8,7 @@ var passport	= require('passport');
 var express     = require('express');
 
 
+
 // connect to database
 mongoose.connect(config.database, { useNewUrlParser: true });
  
@@ -17,18 +18,26 @@ require('./config/passport')(passport);
 // bundle our routes
 var apiRoutes = express.Router();
  
+
+
 apiRoutes.post('/Register', function(req, res) {
+   
+    // checks if at least one field is empty
   if (!req.body.username || !req.body.password || !req.body.email) {
     return res.status(400).json(new response(400, null, "All fields are required").JSON)
   }
+
+  // checks email format validity
   if(!validator(req.body.email)) {
     return res.status(400).json(new response(400, null, "Invalid Email format").JSON)
   }
+
   var newUser = new User({
       username: req.body.username,
       password: req.body.password,
       email: req.body.email
     });
+
     // save the user
     newUser.save(function(err) {
       if (err) {
@@ -37,6 +46,9 @@ apiRoutes.post('/Register', function(req, res) {
       return res.status(201).json(new response(201, null, "Registraion Successful").JSON);
     });
 });
+
+
+
 
 apiRoutes.post('/login', function(req, res) {
     if (!req.body.password || !req.body.email) {
@@ -54,19 +66,20 @@ apiRoutes.post('/login', function(req, res) {
 
       // if user not found
       if (!user) {
-        return res.status(401).json(new response(401, null, 'Authentication failed. Wrong password.').JSON)
+        return res.status(401).json(new response(401, null, 'Authentication failed. Wrong Username or Password.').JSON)
     } else {
         // check if password matches
         user.comparePassword(req.body.password, function (err, isMatch) {
           if (isMatch && !err) {
             // if user is found and password is right create a token
             var token = jwt.encode(user, config.secret);
-            return res.status(200).json(new response(200, {token: 'bearer ' + token, user: user}, "Logedd In!").JSON)
+            return res.status(200).json(new response(200, {token: 'bearer ' + token, username:user.username, email:user.email}, "Logedd In!").JSON)
           } 
-            return res.status(401).json(new response(401, null, 'Authentication failed. Wrong password.').JSON)
+            return res.status(401).json(new response(401, null, 'Authentication failed. Wrong Username or Password.').JSON)
         })}
 })
 })
+
 
 
 apiRoutes.post('/getUserProfile', passport.authenticate('jwt', { session: false}), function(req, res) {
@@ -89,6 +102,9 @@ apiRoutes.post('/getUserProfile', passport.authenticate('jwt', { session: false}
     }
   });
    
+
+
+  // split header to retrive the token
   getToken = function (headers) {
     if (headers && headers.authorization) {
       var parted = headers.authorization.split(' ');
