@@ -2,7 +2,7 @@
   "name": "merchant",
   "main": "server.js",
   "dependencies": {
-    "bcrypt": "^4.0.1",
+    "bcrypt": "^5.0.0",
     "body-parser": "^1.19.0",
     "express": "^4.17.1",
     "fs": "0.0.1-security",
